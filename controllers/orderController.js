@@ -2,40 +2,71 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const RestockQueue = require('../models/RestockQueue');
 const ActivityLog = require('../models/ActivityLog');
+const { buildPaginatedResponse, parsePaginationParams } = require('../utils/paginationUtils');
 
-// @desc    Get all orders
+// @desc    Get all orders with pagination, search and filters
 // @route   GET /api/orders
 // @access  Private
 exports.getOrders = async (req, res) => {
   try {
+    const { page, size, skip } = parsePaginationParams(req.query);
     const query = { owner: req.user._id };
 
-    // Dynamic filtering
-    if (req.query.status) query.status = req.query.status;
-    if (req.query.customerName) {
-      query.customerName = { $regex: req.query.customerName, $options: 'i' };
+    // Search filter (order number or customer name)
+    if (req.query.search) {
+      query.$or = [
+        { orderNumber: { $regex: req.query.search, $options: 'i' } },
+        { customerName: { $regex: req.query.search, $options: 'i' } }
+      ];
     }
 
-    // Date filtering
-    if (req.query.startDate || req.query.endDate) {
+    // Status filter
+    if (req.query.status) {
+      query.status = req.query.status;
+    }
+
+    // Date range filter
+    if (req.query.from || req.query.to) {
       query.createdAt = {};
-      if (req.query.startDate) {
-        query.createdAt.$gte = new Date(req.query.startDate);
+      if (req.query.from) {
+        query.createdAt.$gte = new Date(parseInt(req.query.from));
       }
-      if (req.query.endDate) {
-        query.createdAt.$lte = new Date(req.query.endDate);
+      if (req.query.to) {
+        query.createdAt.$lte = new Date(parseInt(req.query.to));
       }
     }
 
+    // Get total count
+    const totalElements = await Order.countDocuments(query);
+
+    // Get paginated data
     const orders = await Order.find(query)
       .populate('items.product')
-      .sort('-createdAt');
+      .sort('-createdAt')
+      .skip(skip)
+      .limit(size);
 
-    res.status(200).json({
-      success: true,
-      count: orders.length,
-      orders
-    });
+    // Transform data to match required format
+    const content = orders.map(order => ({
+      id: order._id,
+      createdAt: new Date(order.createdAt).getTime(),
+      updatedAt: new Date(order.updatedAt).getTime(),
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      status: order.status,
+      totalPrice: order.totalPrice,
+      items: order.items.map(item => ({
+        productId: item.product?._id,
+        productName: item.product?.name || item.productName,
+        quantity: item.quantity,
+        price: item.price
+      })),
+      createdBy: req.user ? { id: req.user._id, firstName: req.user.name, lastName: '' } : null,
+      updatedBy: null
+    }));
+
+    const response = buildPaginatedResponse(content, page, size, totalElements);
+    res.status(200).json(response);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

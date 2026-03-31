@@ -2,32 +2,67 @@ const Product = require('../models/Product');
 const Category = require('../models/Category');
 const RestockQueue = require('../models/RestockQueue');
 const ActivityLog = require('../models/ActivityLog');
+const { buildPaginatedResponse, parsePaginationParams } = require('../utils/paginationUtils');
 
-// @desc    Get all products
+// @desc    Get all products with pagination, search and filters
 // @route   GET /api/products
 // @access  Private
 exports.getProducts = async (req, res) => {
   try {
+    const { page, size, skip } = parsePaginationParams(req.query);
     const query = { owner: req.user._id };
 
-    // Dynamic filtering
-    if (req.query.category) query.category = req.query.category;
-    if (req.query.status) query.status = req.query.status;
+    // Search filter
     if (req.query.search) {
       query.name = { $regex: req.query.search, $options: 'i' };
     }
 
+    // Category filter
+    if (req.query.category) {
+      query.category = req.query.category;
+    }
+
+    // Status filter
+    if (req.query.status) {
+      query.status = req.query.status;
+    }
+
+    // Low stock filter
+    if (req.query.lowStock === 'true') {
+      query.$expr = { $lt: ['$stockQuantity', '$minStockThreshold'] };
+    }
+
+    // Get total count
+    const totalElements = await Product.countDocuments(query);
+
+    // Get paginated data
     const products = await Product.find(query)
       .populate('category')
-      .sort('-createdAt');
+      .sort('-createdAt')
+      .skip(skip)
+      .limit(size);
 
-    res.status(200).json({
-      success: true,
-      count: products.length,
-      products
-    });
+    // Transform data to match required format
+    const content = products.map(prod => ({
+      id: prod._id,
+      createdAt: new Date(prod.createdAt).getTime(),
+      updatedAt: new Date(prod.updatedAt).getTime(),
+      name: prod.name,
+      price: prod.price,
+      stockQuantity: prod.stockQuantity,
+      minStockThreshold: prod.minStockThreshold,
+      status: prod.status,
+      categoryId: prod.category?._id,
+      categoryName: prod.category?.name,
+      active: prod.status === 'Active',
+      createdBy: req.user ? { id: req.user._id, firstName: req.user.name, lastName: '' } : null,
+      updatedBy: null
+    }));
+
+    const response = buildPaginatedResponse(content, page, size, totalElements);
+    res.status(200).json(response);
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
 

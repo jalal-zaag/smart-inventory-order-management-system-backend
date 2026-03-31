@@ -1,13 +1,17 @@
 const RestockQueue = require('../models/RestockQueue');
 const Product = require('../models/Product');
 const ActivityLog = require('../models/ActivityLog');
+const { buildPaginatedResponse, parsePaginationParams } = require('../utils/paginationUtils');
 
-// @desc    Get restock queue
+// @desc    Get restock queue with pagination
 // @route   GET /api/restock-queue
 // @access  Private
 exports.getRestockQueue = async (req, res) => {
   try {
-    const queue = await RestockQueue.find()
+    const { page, size, skip } = parsePaginationParams(req.query);
+    
+    // First get all queue items for this user's products
+    const allQueueItems = await RestockQueue.find()
       .populate({
         path: 'product',
         match: { owner: req.user._id },
@@ -16,15 +20,37 @@ exports.getRestockQueue = async (req, res) => {
       .sort({ priority: 1, currentStock: 1, addedAt: 1 });
 
     // Filter out items where product is null (not owned by user)
-    const filteredQueue = queue.filter(item => item.product !== null);
+    const filteredQueue = allQueueItems.filter(item => item.product !== null);
+    
+    // Apply priority filter if provided
+    let finalQueue = filteredQueue;
+    if (req.query.priority) {
+      finalQueue = filteredQueue.filter(item => item.priority === req.query.priority);
+    }
 
-    res.status(200).json({
-      success: true,
-      count: filteredQueue.length,
-      queue: filteredQueue
-    });
+    // Manual pagination
+    const totalElements = finalQueue.length;
+    const paginatedQueue = finalQueue.slice(skip, skip + size);
+
+    // Transform data to match required format
+    const content = paginatedQueue.map(item => ({
+      id: item._id,
+      createdAt: new Date(item.addedAt).getTime(),
+      updatedAt: new Date(item.addedAt).getTime(),
+      productId: item.product?._id,
+      productName: item.product?.name,
+      currentStock: item.currentStock,
+      minStockThreshold: item.minStockThreshold,
+      priority: item.priority,
+      addedAt: new Date(item.addedAt).getTime(),
+      createdBy: req.user ? { id: req.user._id, firstName: req.user.name, lastName: '' } : null,
+      updatedBy: null
+    }));
+
+    const response = buildPaginatedResponse(content, page, size, totalElements);
+    res.status(200).json(response);
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
 

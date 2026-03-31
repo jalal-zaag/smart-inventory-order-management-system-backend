@@ -1,22 +1,45 @@
 const Category = require('../models/Category');
 const ActivityLog = require('../models/ActivityLog');
+const { buildPaginatedResponse, parsePaginationParams } = require('../utils/paginationUtils');
 
-// @desc    Get all categories
+// @desc    Get all categories with pagination and search
 // @route   GET /api/categories
 // @access  Private
 exports.getCategories = async (req, res) => {
   try {
+    const { page, size, skip } = parsePaginationParams(req.query);
     const query = { owner: req.user._id };
 
-    const categories = await Category.find(query).sort('-createdAt');
+    // Search filter
+    if (req.query.search) {
+      query.name = { $regex: req.query.search, $options: 'i' };
+    }
 
-    res.status(200).json({
-      success: true,
-      count: categories.length,
-      categories
-    });
+    // Get total count
+    const totalElements = await Category.countDocuments(query);
+
+    // Get paginated data
+    const categories = await Category.find(query)
+      .sort('-createdAt')
+      .skip(skip)
+      .limit(size);
+
+    // Transform data to match required format
+    const content = categories.map(cat => ({
+      id: cat._id,
+      createdAt: new Date(cat.createdAt).getTime(),
+      updatedAt: new Date(cat.updatedAt).getTime(),
+      name: cat.name,
+      description: cat.description,
+      active: true,
+      createdBy: req.user ? { id: req.user._id, firstName: req.user.name, lastName: '' } : null,
+      updatedBy: null
+    }));
+
+    const response = buildPaginatedResponse(content, page, size, totalElements);
+    res.status(200).json(response);
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
 
