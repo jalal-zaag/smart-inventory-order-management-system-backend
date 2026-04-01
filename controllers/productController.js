@@ -10,7 +10,9 @@ const { buildPaginatedResponse, parsePaginationParams } = require('../utils/pagi
 exports.getProducts = async (req, res) => {
   try {
     const { page, size, skip } = parsePaginationParams(req.query);
-    const query = { owner: req.user._id };
+    
+    // Admin sees all products, regular users see only their own
+    const query = req.user.role === 'admin' ? {} : { owner: req.user._id };
 
     // Search filter
     if (req.query.search) {
@@ -80,8 +82,8 @@ exports.getProduct = async (req, res) => {
       });
     }
 
-    // Authorization check
-    if (product.owner.toString() !== req.user._id.toString()) {
+    // Admin can access any product, regular users only their own
+    if (req.user.role !== 'admin' && product.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to access this product' 
@@ -113,8 +115,8 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    // Authorization check for category
-    if (categoryDoc.owner.toString() !== req.user._id.toString()) {
+    // Admin can use any category
+    if (req.user.role !== 'admin' && categoryDoc.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to use this category' 
@@ -169,7 +171,7 @@ exports.createProduct = async (req, res) => {
 
 // @desc    Update product
 // @route   PUT /api/products/:id
-// @access  Private
+// @access  Private (Owner or Admin)
 exports.updateProduct = async (req, res) => {
   try {
     let product = await Product.findById(req.params.id);
@@ -181,8 +183,8 @@ exports.updateProduct = async (req, res) => {
       });
     }
 
-    // Authorization check
-    if (product.owner.toString() !== req.user._id.toString()) {
+    // Admin can update any product, regular users only their own
+    if (req.user.role !== 'admin' && product.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to update this product' 
@@ -192,7 +194,14 @@ exports.updateProduct = async (req, res) => {
     // If category is being changed, validate new category
     if (req.body.category && req.body.category !== product.category.toString()) {
       const categoryDoc = await Category.findById(req.body.category);
-      if (!categoryDoc || categoryDoc.owner.toString() !== req.user._id.toString()) {
+      if (!categoryDoc) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Category not found' 
+        });
+      }
+      // Admin can use any category
+      if (req.user.role !== 'admin' && categoryDoc.owner.toString() !== req.user._id.toString()) {
         return res.status(403).json({ 
           success: false, 
           message: 'Not authorized to use this category' 
@@ -256,7 +265,7 @@ exports.updateProduct = async (req, res) => {
 
 // @desc    Delete product
 // @route   DELETE /api/products/:id
-// @access  Private
+// @access  Private (Owner or Admin)
 exports.deleteProduct = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
@@ -268,8 +277,8 @@ exports.deleteProduct = async (req, res) => {
       });
     }
 
-    // Authorization check
-    if (product.owner.toString() !== req.user._id.toString()) {
+    // Admin can delete any product, regular users only their own
+    if (req.user.role !== 'admin' && product.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to delete this product' 

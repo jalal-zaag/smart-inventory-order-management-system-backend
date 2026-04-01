@@ -6,20 +6,22 @@ const {
   updateCategory,
   deleteCategory
 } = require('../controllers/categoryController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(protect);
 
+// All authenticated users can CRUD categories
+// Users manage their own data; admins can manage all
 router.route('/')
   .get(getCategories)
-  .post(authorize('admin', 'manager'), createCategory);
+  .post(createCategory);
 
 router.route('/:id')
   .get(getCategory)
-  .put(authorize('admin', 'manager'), updateCategory)
-  .delete(authorize('admin'), deleteCategory);
+  .put(updateCategory)
+  .delete(deleteCategory);
 
 module.exports = router;

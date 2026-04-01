@@ -12,11 +12,10 @@ const seedDatabase = async () => {
         await mongoose.connect(process.env.MONGO_URI);
         console.log('Connected to MongoDB');
 
-        // Create demo users with different roles
+        // Create demo users - simplified role system (admin and user only)
         const users = [
             { name: 'Admin User', email: 'admin@example.com', password: 'admin123', role: 'admin' },
-            { name: 'Manager User', email: 'manager@example.com', password: 'manager123', role: 'manager' },
-            { name: 'Demo User', email: 'demo@example.com', password: 'demo123', role: 'staff' }
+            { name: 'Demo User', email: 'user@example.com', password: 'user123', role: 'user' }
         ];
 
         let demoUser;
@@ -88,9 +87,8 @@ const seedDatabase = async () => {
 
         console.log('\n🎉 Database seeded successfully!');
         console.log('\nDemo Credentials:');
-        console.log('  Admin:   admin@example.com / admin123');
-        console.log('  Manager: manager@example.com / manager123');
-        console.log('  Staff:   demo@example.com / demo123');
+        console.log('  Admin: admin@example.com / admin123');
+        console.log('  User:  user@example.com / user123');
         
         process.exit(0);
     } catch (error) {

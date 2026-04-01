@@ -8,7 +8,9 @@ const { buildPaginatedResponse, parsePaginationParams } = require('../utils/pagi
 exports.getCategories = async (req, res) => {
   try {
     const { page, size, skip } = parsePaginationParams(req.query);
-    const query = { owner: req.user._id };
+    
+    // Admin sees all categories, regular users see only their own
+    const query = req.user.role === 'admin' ? {} : { owner: req.user._id };
 
     // Search filter
     if (req.query.search) {
@@ -57,8 +59,8 @@ exports.getCategory = async (req, res) => {
       });
     }
 
-    // Authorization check
-    if (category.owner.toString() !== req.user._id.toString()) {
+    // Admin can access any category, regular users only their own
+    if (req.user.role !== 'admin' && category.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to access this category' 
@@ -122,7 +124,7 @@ exports.createCategory = async (req, res) => {
 
 // @desc    Update category
 // @route   PUT /api/categories/:id
-// @access  Private
+// @access  Private (Owner or Admin)
 exports.updateCategory = async (req, res) => {
   try {
     let category = await Category.findById(req.params.id);
@@ -134,21 +136,21 @@ exports.updateCategory = async (req, res) => {
       });
     }
 
-    // Authorization check
-    if (category.owner.toString() !== req.user._id.toString()) {
+    // Admin can update any category, regular users only their own
+    if (req.user.role !== 'admin' && category.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to update this category' 
       });
     }
 
-    // Check if new name conflicts with existing category
+    // Check if new name conflicts with existing category (for the same owner or globally for admin)
     if (req.body.name && req.body.name !== category.name) {
-      const existingCategory = await Category.findOne({ 
-        name: req.body.name.trim(), 
-        owner: req.user._id,
-        _id: { $ne: req.params.id }
-      });
+      const nameQuery = req.user.role === 'admin' 
+        ? { name: req.body.name.trim(), _id: { $ne: req.params.id } }
+        : { name: req.body.name.trim(), owner: req.user._id, _id: { $ne: req.params.id } };
+      
+      const existingCategory = await Category.findOne(nameQuery);
 
       if (existingCategory) {
         return res.status(400).json({ 
@@ -189,7 +191,7 @@ exports.updateCategory = async (req, res) => {
 
 // @desc    Delete category
 // @route   DELETE /api/categories/:id
-// @access  Private
+// @access  Private (Owner or Admin)
 exports.deleteCategory = async (req, res) => {
   try {
     const category = await Category.findById(req.params.id);
@@ -201,8 +203,8 @@ exports.deleteCategory = async (req, res) => {
       });
     }
 
-    // Authorization check
-    if (category.owner.toString() !== req.user._id.toString()) {
+    // Admin can delete any category, regular users only their own
+    if (req.user.role !== 'admin' && category.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to delete this category' 

@@ -10,16 +10,26 @@ exports.getRestockQueue = async (req, res) => {
   try {
     const { page, size, skip } = parsePaginationParams(req.query);
     
-    // First get all queue items for this user's products
-    const allQueueItems = await RestockQueue.find()
-      .populate({
-        path: 'product',
-        match: { owner: req.user._id },
-        select: 'name stockQuantity minStockThreshold status category'
-      })
-      .sort({ priority: 1, currentStock: 1, addedAt: 1 });
+    // Admin sees all queue items, regular users see only their products
+    let allQueueItems;
+    if (req.user.role === 'admin') {
+      allQueueItems = await RestockQueue.find()
+        .populate({
+          path: 'product',
+          select: 'name stockQuantity minStockThreshold status category owner'
+        })
+        .sort({ priority: 1, currentStock: 1, addedAt: 1 });
+    } else {
+      allQueueItems = await RestockQueue.find()
+        .populate({
+          path: 'product',
+          match: { owner: req.user._id },
+          select: 'name stockQuantity minStockThreshold status category owner'
+        })
+        .sort({ priority: 1, currentStock: 1, addedAt: 1 });
+    }
 
-    // Filter out items where product is null (not owned by user)
+    // Filter out items where product is null (not owned by user for non-admin)
     const filteredQueue = allQueueItems.filter(item => item.product !== null);
     
     // Apply priority filter if provided
@@ -86,8 +96,8 @@ exports.restockProduct = async (req, res) => {
       });
     }
 
-    // Authorization check
-    if (product.owner.toString() !== req.user._id.toString()) {
+    // Authorization check - admin can restock any product, users only their own
+    if (req.user.role !== 'admin' && product.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to restock this product' 
@@ -142,9 +152,9 @@ exports.removeFromQueue = async (req, res) => {
       });
     }
 
-    // Authorization check
+    // Authorization check - admin can modify any queue item, users only their own
     const product = await Product.findById(queueItem.product._id);
-    if (product && product.owner.toString() !== req.user._id.toString()) {
+    if (product && req.user.role !== 'admin' && product.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to modify this queue item' 

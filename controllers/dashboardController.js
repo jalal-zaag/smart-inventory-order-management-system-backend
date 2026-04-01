@@ -13,53 +13,49 @@ exports.getDashboardStats = async (req, res) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
+    // Admin sees all data, regular users see only their own
+    const ownerFilter = req.user.role === 'admin' ? {} : { owner: req.user._id };
+
     // Total orders today
     const ordersToday = await Order.countDocuments({
-      owner: req.user._id,
+      ...ownerFilter,
       createdAt: { $gte: today, $lt: tomorrow }
     });
 
     // Pending orders
     const pendingOrders = await Order.countDocuments({
-      owner: req.user._id,
+      ...ownerFilter,
       status: 'Pending'
     });
 
     // Completed orders (Delivered)
     const completedOrders = await Order.countDocuments({
-      owner: req.user._id,
+      ...ownerFilter,
       status: 'Delivered'
     });
 
     // Revenue today
+    const revenueMatch = req.user.role === 'admin' 
+      ? { createdAt: { $gte: today, $lt: tomorrow }, status: { $ne: 'Cancelled' } }
+      : { owner: req.user._id, createdAt: { $gte: today, $lt: tomorrow }, status: { $ne: 'Cancelled' } };
+
     const revenueResult = await Order.aggregate([
-      {
-        $match: {
-          owner: req.user._id,
-          createdAt: { $gte: today, $lt: tomorrow },
-          status: { $ne: 'Cancelled' }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: '$totalPrice' }
-        }
-      }
+      { $match: revenueMatch },
+      { $group: { _id: null, total: { $sum: '$totalPrice' } } }
     ]);
 
     const revenueToday = revenueResult.length > 0 ? revenueResult[0].total : 0;
 
     // Low stock items count
-    const lowStockProducts = await Product.find({
-      owner: req.user._id,
-      $expr: { $lt: ['$stockQuantity', '$minStockThreshold'] }
-    });
+    const lowStockQuery = req.user.role === 'admin' 
+      ? { $expr: { $lt: ['$stockQuantity', '$minStockThreshold'] } }
+      : { owner: req.user._id, $expr: { $lt: ['$stockQuantity', '$minStockThreshold'] } };
 
+    const lowStockProducts = await Product.find(lowStockQuery);
     const lowStockCount = lowStockProducts.length;
 
-    // Product summary (top 5 products with stock info)
-    const products = await Product.find({ owner: req.user._id })
+    // Product summary (top 10 products with stock info)
+    const products = await Product.find(ownerFilter)
       .select('name stockQuantity minStockThreshold status')
       .sort('-createdAt')
       .limit(10);
@@ -95,10 +91,13 @@ exports.getRecentActivities = async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
 
-    const activities = await ActivityLog.find({ user: req.user._id })
+    // Admin sees all activities, regular users only their own
+    const query = req.user.role === 'admin' ? {} : { user: req.user._id };
+
+    const activities = await ActivityLog.find(query)
       .sort('-createdAt')
       .limit(limit)
-      .select('action description createdAt resourceType metadata');
+      .select('action description createdAt resourceType metadata userName');
 
     res.status(200).json({
       success: true,
@@ -123,14 +122,14 @@ exports.getChartData = async (req, res) => {
     startDate.setDate(startDate.getDate() - (days - 1));
     startDate.setHours(0, 0, 0, 0);
 
+    // Admin sees all data, regular users only their own
+    const matchQuery = req.user.role === 'admin'
+      ? { createdAt: { $gte: startDate, $lte: endDate } }
+      : { owner: req.user._id, createdAt: { $gte: startDate, $lte: endDate } };
+
     // Aggregate orders by day
     const ordersByDay = await Order.aggregate([
-      {
-        $match: {
-          owner: req.user._id,
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      { $match: matchQuery },
       {
         $group: {
           _id: {

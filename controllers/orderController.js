@@ -10,7 +10,9 @@ const { buildPaginatedResponse, parsePaginationParams } = require('../utils/pagi
 exports.getOrders = async (req, res) => {
   try {
     const { page, size, skip } = parsePaginationParams(req.query);
-    const query = { owner: req.user._id };
+    
+    // Admin sees all orders, regular users see only their own
+    const query = req.user.role === 'admin' ? {} : { owner: req.user._id };
 
     // Search filter (order number or customer name)
     if (req.query.search) {
@@ -86,8 +88,8 @@ exports.getOrder = async (req, res) => {
       });
     }
 
-    // Authorization check
-    if (order.owner.toString() !== req.user._id.toString()) {
+    // Admin can access any order, regular users only their own
+    if (req.user.role !== 'admin' && order.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to access this order' 
@@ -248,8 +250,8 @@ exports.updateOrder = async (req, res) => {
       });
     }
 
-    // Authorization check
-    if (order.owner.toString() !== req.user._id.toString()) {
+    // Admin can update any order, regular users only their own
+    if (req.user.role !== 'admin' && order.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to update this order' 
@@ -309,8 +311,8 @@ exports.cancelOrder = async (req, res) => {
       });
     }
 
-    // Authorization check
-    if (order.owner.toString() !== req.user._id.toString()) {
+    // Admin can cancel any order, regular users only their own
+    if (req.user.role !== 'admin' && order.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to cancel this order' 
@@ -393,8 +395,8 @@ exports.deleteOrder = async (req, res) => {
       });
     }
 
-    // Authorization check
-    if (order.owner.toString() !== req.user._id.toString()) {
+    // Admin can delete any order, regular users only their own
+    if (req.user.role !== 'admin' && order.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to delete this order' 

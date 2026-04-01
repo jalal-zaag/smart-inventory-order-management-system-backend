@@ -44,6 +44,7 @@ exports.generateToken = (id) => {
 };
 
 // @desc    Authorize by role - restrict access to specific roles
+// Simplified: only 'admin' and 'user' roles exist
 exports.authorize = (...roles) => {
   return (req, res, next) => {
     if (!req.user) {
@@ -62,4 +63,23 @@ exports.authorize = (...roles) => {
 
     next();
   };
+};
+
+// @desc    Check if user is admin - convenience middleware
+exports.adminOnly = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Not authenticated'
+    });
+  }
+
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Admin access required'
+    });
+  }
+
+  next();
 };
