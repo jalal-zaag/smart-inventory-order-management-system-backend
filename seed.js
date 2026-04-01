@@ -12,18 +12,30 @@ const seedDatabase = async () => {
         await mongoose.connect(process.env.MONGO_URI);
         console.log('Connected to MongoDB');
 
-        // Check if demo user exists
-        let demoUser = await User.findOne({ email: 'demo@example.com' });
-        
-        if (!demoUser) {
-            demoUser = await User.create({
-                name: 'Demo User',
-                email: 'demo@example.com',
-                password: 'demo123'
-            });
-            console.log('✅ Demo user created');
-        } else {
-            console.log('Demo user already exists');
+        // Create demo users with different roles
+        const users = [
+            { name: 'Admin User', email: 'admin@example.com', password: 'admin123', role: 'admin' },
+            { name: 'Manager User', email: 'manager@example.com', password: 'manager123', role: 'manager' },
+            { name: 'Demo User', email: 'demo@example.com', password: 'demo123', role: 'staff' }
+        ];
+
+        let demoUser;
+        for (const userData of users) {
+            let user = await User.findOne({ email: userData.email });
+            if (!user) {
+                // Create new user
+                user = await User.create(userData);
+                console.log(`✅ ${userData.role.toUpperCase()} user created: ${userData.email}`);
+            } else {
+                // Delete and recreate to ensure password is correct
+                await User.deleteOne({ email: userData.email });
+                user = await User.create(userData);
+                console.log(`✅ ${userData.role.toUpperCase()} user recreated: ${userData.email}`);
+            }
+            // Use admin as the demo user for seeding products
+            if (userData.role === 'admin') {
+                demoUser = user;
+            }
         }
 
         // Create sample categories
@@ -34,17 +46,26 @@ const seedDatabase = async () => {
         ];
 
         for (const cat of categories) {
-            const exists = await Category.findOne({ name: cat.name, owner: demoUser._id });
-            if (!exists) {
+            let existingCat = await Category.findOne({ name: cat.name });
+            if (!existingCat) {
                 await Category.create({ ...cat, owner: demoUser._id });
                 console.log(`✅ Category "${cat.name}" created`);
+            } else {
+                // Update owner if needed
+                if (existingCat.owner.toString() !== demoUser._id.toString()) {
+                    existingCat.owner = demoUser._id;
+                    await existingCat.save();
+                    console.log(`✅ Category "${cat.name}" updated owner`);
+                } else {
+                    console.log(`Category "${cat.name}" already exists`);
+                }
             }
         }
 
-        // Get category IDs
-        const electronicsCategory = await Category.findOne({ name: 'Electronics', owner: demoUser._id });
-        const clothingCategory = await Category.findOne({ name: 'Clothing', owner: demoUser._id });
-        const groceryCategory = await Category.findOne({ name: 'Grocery', owner: demoUser._id });
+        // Get category IDs (regardless of owner for seed)
+        const electronicsCategory = await Category.findOne({ name: 'Electronics' });
+        const clothingCategory = await Category.findOne({ name: 'Clothing' });
+        const groceryCategory = await Category.findOne({ name: 'Grocery' });
 
         // Create sample products
         const products = [
@@ -67,8 +88,9 @@ const seedDatabase = async () => {
 
         console.log('\n🎉 Database seeded successfully!');
         console.log('\nDemo Credentials:');
-        console.log('  Email: demo@example.com');
-        console.log('  Password: demo123');
+        console.log('  Admin:   admin@example.com / admin123');
+        console.log('  Manager: manager@example.com / manager123');
+        console.log('  Staff:   demo@example.com / demo123');
         
         process.exit(0);
     } catch (error) {
