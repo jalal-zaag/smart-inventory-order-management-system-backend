@@ -19,6 +19,7 @@ mongoose.connect(process.env.MONGO_URI)
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/categories', require('./routes/categoryRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
+app.use('/api/customers', require('./routes/customerRoutes'));
 app.use('/api/orders', require('./routes/orderRoutes'));
 app.use('/api/restock-queue', require('./routes/restockRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
@@ -35,6 +36,7 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       categories: '/api/categories',
       products: '/api/products',
+      customers: '/api/customers',
       orders: '/api/orders',
       restockQueue: '/api/restock-queue',
       dashboard: '/api/dashboard',
