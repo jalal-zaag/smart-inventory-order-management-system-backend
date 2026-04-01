@@ -23,6 +23,24 @@ app.use('/api/orders', require('./routes/orderRoutes'));
 app.use('/api/restock-queue', require('./routes/restockRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 
+// Root route
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    success: true, 
+    message: 'Smart Inventory Order Management System API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      categories: '/api/categories',
+      products: '/api/products',
+      orders: '/api/orders',
+      restockQueue: '/api/restock-queue',
+      dashboard: '/api/dashboard'
+    }
+  });
+});
+
 // Health check route
 app.get('/api/health', (req, res) => {
   res.status(200).json({ 
