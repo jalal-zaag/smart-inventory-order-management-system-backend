@@ -22,6 +22,7 @@ app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/orders', require('./routes/orderRoutes'));
 app.use('/api/restock-queue', require('./routes/restockRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
+app.use('/api/activity-logs', require('./routes/activityLogRoutes'));
 
 // Root route
 app.get('/', (req, res) => {
@@ -36,7 +37,8 @@ app.get('/', (req, res) => {
       products: '/api/products',
       orders: '/api/orders',
       restockQueue: '/api/restock-queue',
-      dashboard: '/api/dashboard'
+      dashboard: '/api/dashboard',
+      activityLogs: '/api/activity-logs'
     }
   });
 });
